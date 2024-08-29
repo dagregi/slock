@@ -67,6 +67,70 @@ die(const char *errstr, ...) {
 #include <fcntl.h>
 
 static void
+writemessage(Display *dpy, Window win, int screen)
+{
+	int len, line_len, width, height, i, j, k, tab_replace, tab_size;
+	XGCValues gr_values;
+	XFontStruct *fontinfo;
+	XColor color, dummy;
+	GC gc;
+	fontinfo = XLoadQueryFont(dpy, text_size);
+	tab_size = 8 * XTextWidth(fontinfo, " ", 1);
+
+	XAllocNamedColor(dpy, DefaultColormap(dpy, screen),
+			 text_color, &color, &dummy);
+
+	gr_values.font = fontinfo->fid;
+	gr_values.foreground = color.pixel;
+	gc=XCreateGC(dpy,win,GCFont+GCForeground, &gr_values);
+
+
+	/*
+	 * Start formatting and drawing text
+	 */
+
+	len = strlen(message);
+
+	/* Max max line length (cut at '\n') */
+	line_len = 0;
+	k = 0;
+	for (i = j = 0; i < len; i++) {
+		if (message[i] == '\n') {
+			if (i - j > line_len)
+				line_len = i - j;
+			k++;
+			i++;
+			j = i;
+		}
+	}
+	/* If there is only one line */
+	if (line_len == 0)
+		line_len = len;
+
+	height = DisplayHeight(dpy, screen)*3/7 - (k*20)/3;
+	width  = (DisplayWidth(dpy, screen) - XTextWidth(fontinfo, message, line_len))/2;
+
+	/* Look for '\n' and print the text between them. */
+	for (i = j = k = 0; i <= len; i++) {
+		/* i == len is the special case for the last line */
+		if (i == len || message[i] == '\n') {
+			tab_replace = 0;
+			while (message[j] == '\t' && j < i) {
+				tab_replace++;
+				j++;
+			}
+
+			XDrawString(dpy, win, gc, width + tab_size*tab_replace, height + 20*k, message + j, i - j);
+			while (i < len && message[i] == '\n') {
+				i++;
+				j = i;
+				k++;
+			}
+		}
+	}
+}
+
+static void
 dontkillme(void) {
   errno = 0;
   int fd = open("/proc/self/oom_score_adj", O_WRONLY);
@@ -266,8 +330,9 @@ webcam_shot(int async) {
     cmd,
     CMD_LENGTH,
     "ffmpeg -y -loglevel quiet -f video4linux2 -i /dev/video0"
-    " -frames:v 1 -f image2 %s/slock.jpg%s",
+    " -frames:v 1 -f image2 %s/slock-%s.jpg%s",
     getenv("HOME"),
+	"$(date +%Y%m%d-%I%M%S)",
     async ? " &" : ""
   );
 
@@ -459,7 +524,7 @@ play_beep(int async) {
     cmd,
     CMD_LENGTH,
     "aplay %s/slock/beep.wav 2> /dev/null%s",
-    getenv("HOME"),
+    getenv("XDG_DATA_HOME"),
     async ? " &" : ""
   );
 
@@ -481,7 +546,7 @@ play_alarm(int async) {
     cmd,
     CMD_LENGTH,
     "aplay %s/slock/police.wav 2> /dev/null%s",
-    getenv("HOME"),
+    getenv("XDG_DATA_HOME"),
     async ? " &" : ""
   );
 
@@ -601,8 +666,8 @@ readpw(Display *dpy, const char *pws)
 
           // Play a siren if there are more than 2 bad
           // passwords, a beep if a correct password.
-          if (lock_tries > 2) {
-            play_alarm(0);
+          if (lock_tries > 3) {
+            play_alarm(1);
           } else {
             play_beep(0);
           }
@@ -693,6 +758,7 @@ readpw(Display *dpy, const char *pws)
           locks[screen]->colors[1]
         );
         XClearWindow(dpy, locks[screen]->win);
+		writemessage(dpy, locks[screen]->win, screen);
       }
     } else if (llen != 0 && len == 0) {
       for (screen = 0; screen < nscreens; screen++) {
@@ -914,8 +980,8 @@ read_pw_file(void) {
   int r = snprintf(
     name,
     sizeof(name),
-    "%s/.slock_passwd",
-    getenv("HOME")
+    "%s/slock_passwd",
+    getenv("XDG_DATA_HOME")
   );
 
   if (r < 0 || r >= sizeof(name))
@@ -974,6 +1040,7 @@ main(int argc, char **argv) {
   for (screen = 0; screen < nscreens; screen++) {
     locks[screen] = lockscreen(dpy, screen);
     if (locks[screen] != NULL)
+	  writemessage(dpy, locks[screen]->win, screen);
       nlocks++;
   }
 
