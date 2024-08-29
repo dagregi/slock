@@ -25,19 +25,9 @@
 #include <bsd_auth.h>
 #endif
 
-#include "imgur.h"
-#include "twilio.h"
+#include "config.h"
 
 #define CMD_LENGTH 500
-
-#define POWEROFF 1
-#define USBOFF 1
-#define STRICT_USBOFF 0
-#define TWILIO_SEND 1
-#define WEBCAM_SHOT 1
-#define IMGUR_UPLOAD 0
-#define PLAY_AUDIO 1
-#define TRANSPARENT 1
 
 char *g_pw = NULL;
 int lock_tries = 0;
